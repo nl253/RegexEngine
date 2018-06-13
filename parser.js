@@ -1,7 +1,7 @@
 /**
  * File description.
  *
- * @format
+ * @format UTF-8
  * @copyright 2018
  * @author nl253
  * @see {@link  details and explanation}
@@ -10,76 +10,7 @@
 
 const R = require('./regex.js');
 
-/**
- * Produce a list with numbers in range.
- *
- * @param {number} min
- * @param {number} max
- * @param {number} step
- * @returns {number[]} *
- */
-function range(min = 0, max = 10, step = 1) {
-  const stack = [];
-  while (min < max) {
-    stack.push(min);
-    min += step;
-  }
-  return stack;
-}
-
-/**
- * Produce a list with letters in range.
- *
- * @param {string} min
- * @param {string} max
- * @param {number} step
- * @returns {string[]} *
- */
-function rangeChar(min = 'a', max = 'z', step = 1) {
-  const stack = [];
-  let min = min.charCodeAt(0);
-  let max = max.charCodeAt(0);
-  while (min < max) {
-    stack.push(String.fromCharCode(min));
-    min += step;
-  }
-  return stack;
-}
-
-const digits = range();
-
-/**
- * Check if string d is a digit.
- *
- * @param {string} d
- * @returns {boolean}
- */
-const isDigit = d => digits.includes(d);
-
-const letters = new Set(rangeChar());
-
-/**
- * Check if string l is a letter.
- *
- * @param {string} l
- * @returns {boolean}
- */
-const isLetter = l => letters.includes(l);
-
-const specials = ['.', '$', '^']; // TODO
-
-/**
- * Called on unexpected input. Only does informative logging.
- *
- * @format
- * @param {string} expectedToken
- * @param {string} unexpectedToken
- * @param {string} extra
- */
-function logErr(expectedToken, unexpectedToken, extra = '') {
-  console.error(`expected ${expectedToken} but saw ${unexpectedToken}`);
-  if (extra.length > 0) console.error(extra);
-}
+const specials = ['.', '$', '^']; // tODO
 
 class Parser {
   /**
@@ -88,8 +19,81 @@ class Parser {
    * @param {string} input
    */
   constructor(input = '') {
+    this.letters = new Set(Parser.rangeChar());
+    this.digits = Parser.range();
     this.input = input;
     this.globalPos = 0;
+  }
+
+  /**
+   * Check if string l is a letter.
+   *
+   * @param {string} l
+   * @returns {boolean} *
+   */
+  isLetter(l) {
+    return this.letters.includes(l);
+  }
+
+  /**
+   * Produce a list with numbers in range.
+   *
+   * @param {number} min
+   * @param {number} max
+   * @param {number} step
+   * @returns {number[]} *
+   */
+  static range(min = 0, max = 10, step = 1) {
+    const stack = [];
+    while (min < max) {
+      stack.push(min);
+      min += step;
+    }
+    return stack;
+  }
+
+  /**
+   * Produce a list with letters in range.
+   *
+   * @param {string} min
+   * @param {string} max
+   * @param {number} step
+   * @returns {string[]} *
+   */
+  static rangeChar(min = 'a', max = 'z', step = 1) {
+    const stack = [];
+    min = min.charCodeAt(0);
+    max = max.charCodeAt(0);
+    while (min < max) {
+      stack.push(String.fromCharCode(min));
+      min += step;
+    }
+    return stack;
+  }
+
+  /**
+   * Called on unexpected input. Only does informative logging.
+   *
+   * @format
+   * @param {string} expectedToken
+   * @param {string} unexpectedToken
+   * @param {string} extra
+   */
+  static logErr(expectedToken, unexpectedToken, extra = '') {
+    /*
+     * console.debug(`expected ${expectedToken} but saw ${unexpectedToken}`);
+     * if (extra.length > 0) console.error(extra);
+     */
+  }
+
+  /**
+   * Check if string d is a digit.
+   *
+   * @param {string} d
+   * @returns {boolean}
+   */
+  isDigit(d) {
+    return this.digits.includes(d);
   }
 
   /**
@@ -105,7 +109,7 @@ class Parser {
 
     while (focus !== ')') {
       if (pos >= this.input.length) {
-        logErr(')', focus, 'unexpected end of input - unmatched "("');
+        Parser.logErr(')', focus, 'unexpected end of input - unmatched "("');
         return undefined;
       } else {
         g.addNext(this.parse(pos));
@@ -118,8 +122,8 @@ class Parser {
 
     const tryQuant = this.parseQuant(g);
 
-    if (tryQuant) return tryQuant;
     // globalPost set by parseCount();
+    if (tryQuant) return tryQuant;
     else {
       this.globalPos = pos; // notify caller
       return g;
@@ -133,21 +137,21 @@ class Parser {
    * @returns {BaseSingular} *
    */
   parseSet(pos) {
-    const set_ = new R.Or();
+    const setNode = new R.Or();
 
     let focus = this.input[pos];
 
     while (focus !== ']') {
       if (pos >= this.input.length) {
-        logErr(']', focus, 'unexpected end of input - unmatched "["');
+        Parser.logErr(']', focus, 'unexpected end of input - unmatched "["');
         return undefined;
       } else {
         const tryParseRange = this.parseSetRange(pos);
         if (tryParseRange) {
-          set_.addNext(tryParseRange);
+          setNode.addNext(tryParseRange);
           pos = this.globalPos;
         } else {
-          set_.addNext(new Text(focus));
+          setNode.addNext(new Text(focus));
           pos++;
         }
         focus = this.input[pos];
@@ -156,13 +160,13 @@ class Parser {
 
     pos++; // skip over ']'
 
-    const tryQuant = this.parseQuant(pos, set_);
+    const tryQuant = this.parseQuant(pos, setNode);
 
-    if (tryQuant) return tryQuant;
     // globalPost set by parseCount();
+    if (tryQuant) return tryQuant;
     else {
       this.globalPos = pos; // notify caller
-      return set_;
+      return setNode;
     }
   }
 
@@ -175,27 +179,14 @@ class Parser {
    * @returns {BaseSingular} *
    */
   parseSetRange(pos) {
-    const node = new R.Or();
-
     const from = this.input[pos];
 
-    if (isLetter(from) || isDigit(from)) {
-      pos++; // skip to -
-      focus = this.input[pos];
-
-      if (focus === '-') {
-        // ensure it's range eg a-z
-        pos++; // skip over '-' to max
-        focus = this.input[pos];
-
-        if (isLetter(focus) || isDigit(focus)) {
-          this.globalPos = pos; // notify caller of successful progress
-          return { to: focus, from };
-        } else logErr('/[a-zA-Z0-9]/', focus, 'invalid min range symbol');
-      } else logErr('-', focus);
-    } else logErr('/[a-zA-Z0-9]/', from, 'invalid max range symbol');
-
-    return undefined;
+    if (this.isLetter(from)) return this.parseSetRangeChar(pos);
+    else if (this.isDigit(from)) return this.parseSetRangeChar(pos);
+    else {
+      Parser.logErr('/[a-zA-Z0-9]/', focus, 'invalid min range symbol');
+      return undefined;
+    }
   }
 
   /**
@@ -216,7 +207,7 @@ class Parser {
       pos++; // skip over '-' to max
       focus = this.input[pos];
 
-      if (isDigit(focus)) {
+      if (this.isDigit(focus)) {
         const to = focus;
 
         while (from < to) {
@@ -228,8 +219,8 @@ class Parser {
         this.globalPos = pos;
 
         return node;
-      } else logErr('/[a-zA-Z0-9]/', focus, 'invalid min range number');
-    } else logErr('-', focus);
+      } else Parser.logErr('/[a-zA-Z0-9]/', focus, 'invalid min range number');
+    } else Parser.logErr('-', focus);
 
     return undefined;
   }
@@ -252,11 +243,11 @@ class Parser {
       pos++; // skip over '-' to max
       focus = this.input[pos];
 
-      if (isLetter(focus)) {
+      if (this.isLetter(focus)) {
         const to = focus;
 
         let i = from.charCodeAt(0);
-        let j = to.charCodeAt(0);
+        const j = to.charCodeAt(0);
 
         while (i < j) {
           node.addNext(new R.Text(String.fromCharCode(i)));
@@ -267,8 +258,8 @@ class Parser {
         this.globalPos = pos;
 
         return node;
-      } else logErr('/[a-zA-Z]/', focus, 'invalid min range character');
-    } else logErr('-', focus);
+      } else Parser.logErr('/[a-zA-Z]/', focus, 'invalid min range character');
+    } else Parser.logErr('-', focus);
 
     return undefined;
   }
@@ -285,8 +276,8 @@ class Parser {
     const max = Number.POSITIVE_INFINITY;
     let focus = this.input[pos];
 
-    if (isDigit(focus)) {
-      min = Number.parseInt(focus);
+    if (this.isDigit(focus)) {
+      min = Number.parseInt(focus, 10);
       pos++;
       focus = this.input[pos];
     }
@@ -295,7 +286,7 @@ class Parser {
       pos++;
       return this.parseCountAfterComma(pos, min, max, node);
     } else {
-      logErr(',', focus);
+      Parser.logErr(',', focus);
       return undefined;
     }
   }
@@ -333,7 +324,7 @@ class Parser {
         return this.parseCount(pos, node);
       }
       default: {
-        logErr('+ OR * OR ? OR {', focus);
+        Parser.logErr('+ OR * OR ? OR {', focus);
         return undefined;
       }
     }
@@ -348,7 +339,7 @@ class Parser {
    * @returns {BaseSingular} *
    */
   parse(pos) {
-    let focus = this.input[pos];
+    const focus = this.input[pos];
 
     switch (focus) {
       case '(': {
@@ -360,9 +351,9 @@ class Parser {
         return this.parseSet(pos);
       }
       default: {
-        let node = new R.Text(focus); // terminal
+        const node = new R.Text(focus); // terminal
         pos++; // skip over it
-        let tryQuant = this.parseQuant(pos, node);
+        const tryQuant = this.parseQuant(pos, node);
         if (tryQuant) return tryQuant;
         // globalPos set by tryQuant()
         else {
@@ -382,7 +373,7 @@ class Parser {
    */
   parseCountAfterComma(pos, min, max, node) {
     let focus = this.input[pos];
-    if (isDigit(focus)) {
+    if (this.isDigit(focus)) {
       max = Number.parseInt(focus);
       pos++;
       focus = this.input[pos];
@@ -393,7 +384,7 @@ class Parser {
       this.globalPos = pos;
       return new R.Quantified(node, min, max);
     } else {
-      logErr('}', focus);
+      Parser.logErr('}', focus);
       return undefined;
     }
   }
@@ -415,10 +406,6 @@ class Parser {
   }
 }
 
-function main() {
-  const parser = new Parser('abc');
-  console.info(parser);
-  console.info(parser.start());
-}
+module.exports = Parser;
 
 // vim:foldmethod=marker:foldmarker={,}:

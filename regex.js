@@ -94,35 +94,40 @@ class Text extends BaseSingular {
   }
 
   consume() {
-    while (this.rest.length > 0) {
-      const fst = this.rest[0];
+    // while (this.rest.length > 0) {
+      // const fst = this.rest[0];
+      // if (fst !== this.pat) return false;
+      // else this.rest = this.rest.substr(1);
 
-      switch (fst) {
-        case '$':
-          if (this.rest[1] !== '\n') {
-            return false;
-          }
-          break;
+      // switch (fst) {
 
-        case '.':
-          break;
+        // case '$':
+          // if (this.rest[1] !== '\n') {
+            // return false;
+          // }
+          // break;
 
-        default:
-          if (fst !== this.pat[0]) return false;
-          break;
-      }
+        // case '.':
+          // break;
 
+        // default:
+          // if (fst !== this.pat) return false;
+          // break;
+      // }
+        //
+    // }
+
+    if (this.rest[0] === this.pat) {
       this.rest = this.rest.substr(1);
-    }
-
-    return true;
+      return true;
+    } else return false;
   }
 }
 
 class BaseSeq extends BaseSingular {
   constructor() {
     super();
-    this.nextNodes = [];
+    this.innerNodes = [];
   }
 
   /**
@@ -131,7 +136,7 @@ class BaseSeq extends BaseSingular {
    * @param {BaseSingular} another
    */
   addNext(another) {
-    this.nextNodes.push(another);
+    this.innerNodes.push(another);
     return this;
   }
 }
@@ -142,13 +147,12 @@ class Group extends BaseSeq {
   }
 
   consume() {
-    for (let i = 0; i < this.nextNodes.length; i++) {
-      let next = this.nextNodes[i];
+    for (let i = 0; i < this.innerNodes.length; i++) {
+      let focus = this.innerNodes[i];
       // when fst node
-      if (i === 0) next.feed(this.rest);
-      // get from the prev node
-      else next.feed(this.nextNodes[i - 1]);
-      const ok = next.consume();
+      if (i === 0) focus.feed(this.rest);
+      else focus.feed(this.innerNodes[i - 1].rest);  // get from the prev node
+      const ok = focus.consume();
       if (!ok) return false;
     }
     return true;
@@ -167,12 +171,12 @@ class Or extends BaseSeq {
   }
 
   consume() {
-    for (let i = 0; i < this.nextNodes.length; i++) {
-      let next = this.nextNodes[i];
+    for (let i = 0; i < this.innerNodes.length; i++) {
+      let next = this.innerNodes[i];
       // when fst node
       if (i === 0) next.feed(this.rest);
       // get from the prev node
-      else next.feed(this.nextNodes[i - 1]);
+      else next.feed(this.innerNodes[i - 1]);
       const ok = next.consume();
       if (ok) {
         this.acceptor = next;
@@ -182,3 +186,10 @@ class Or extends BaseSeq {
     return false;
   }
 }
+
+module.exports = {
+  Group,
+  Or,
+  Text,
+  Quantified,
+};
