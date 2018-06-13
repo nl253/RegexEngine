@@ -4,7 +4,7 @@
 - syntax supported:
 
 | Syntax Support  |      --      |
-|-----------------+--------------|
+| --------------- | ------------ |
 | Basic sequences | `abc`        |
 | Optional match  | `a?`         |
 | min, max bound  | `a{min,max}` |
@@ -19,7 +19,7 @@
 - not supported
 
 | Syntax Support  |      --      |
-|-----------------+--------------|
+| --------------- | ------------ |
 | lnend anchor    | `$`          |
 | lnstart anchor  | `^`          |
 | back refs       | `\1`         |
