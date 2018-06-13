@@ -10,7 +10,6 @@
 
 class BaseSingular {
   constructor() {
-    this.next = null;
     this._input = this._rest = null;
   }
 
@@ -38,51 +37,44 @@ class BaseSingular {
   consume() {
     return true;
   }
-
-  setNext(nextFSM) {
-    this.next = nextFSM;
-    return this;
-  }
 }
 
 // a{min,max}
 class Quantified extends BaseSingular {
-  constructor(pat, min = 1, max = 1) {
+  constructor(innerNode, min = 1, max = 1) {
     super();
     this.min = min;
     this.max = max;
     this.loops = 0;
-    this.pat = pat;
+    this.innerNode = innerNode;
+  }
+
+  feed(input) {
+    this.innerNode.feed(input);
   }
 
   get rest() {
-    return this.pat.rest;
+    return this.innerNode.rest;
   }
 
   get input() {
-    return this.pat.input;
+    return this.innerNode.input;
   }
 
   set rest(rest) {
-    this.pat.rest = rest;
+    this.innerNode.rest = rest;
   }
 
   set input(input) {
-    this.pat.input = input;
+    this.innerNode.input = input;
   }
 
   consume() {
-    while (this.rest.length > 0 && this.pat.consume()) {
-      this.loops++;
+    while (this.rest.length > 0) {
+      if (this.innerNode.consume() && this.loops < this.min) this.loops++;
+      else break;
     }
-
-    if (this.loops >= this.min && this.loops <= this.max) {
-      if (this.next === null) return true;
-      else {
-        this.next.feed(this.rest);
-        return this.next.consume();
-      }
-    } else return false;
+    return this.loops >= this.min && this.loops <= this.max;
   }
 }
 
@@ -94,29 +86,6 @@ class Text extends BaseSingular {
   }
 
   consume() {
-    // while (this.rest.length > 0) {
-      // const fst = this.rest[0];
-      // if (fst !== this.pat) return false;
-      // else this.rest = this.rest.substr(1);
-
-      // switch (fst) {
-
-        // case '$':
-          // if (this.rest[1] !== '\n') {
-            // return false;
-          // }
-          // break;
-
-        // case '.':
-          // break;
-
-        // default:
-          // if (fst !== this.pat) return false;
-          // break;
-      // }
-        //
-    // }
-
     if (this.rest[0] === this.pat) {
       this.rest = this.rest.substr(1);
       return true;
@@ -151,7 +120,7 @@ class Group extends BaseSeq {
       let focus = this.innerNodes[i];
       // when fst node
       if (i === 0) focus.feed(this.rest);
-      else focus.feed(this.innerNodes[i - 1].rest);  // get from the prev node
+      else focus.feed(this.innerNodes[i - 1].rest); // get from the prev node
       const ok = focus.consume();
       if (!ok) return false;
     }
@@ -165,8 +134,12 @@ class Or extends BaseSeq {
     this.acceptor = null;
   }
 
+  set rest(newRest) {
+    this._rest = newRest;
+  }
+
   get rest() {
-    if (this.acceptor === null) return this.rest;
+    if (this.acceptor === null) return this._rest;
     else return this.acceptor.rest;
   }
 
@@ -176,7 +149,7 @@ class Or extends BaseSeq {
       // when fst node
       if (i === 0) next.feed(this.rest);
       // get from the prev node
-      else next.feed(this.innerNodes[i - 1]);
+      else next.feed(this.innerNodes[i - 1].rest);
       const ok = next.consume();
       if (ok) {
         this.acceptor = next;

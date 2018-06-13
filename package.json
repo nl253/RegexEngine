@@ -1,0 +1,14 @@
+{
+  "name": "regex-engine",
+  "version": "1.0.0",
+  "main": "main.js",
+  "author": "nl253 <nl253@kent.ac.uk>",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "test": "./node_modules/.bin/jest"
+  },
+  "devDependencies": {
+    "jest": "^23.1.0"
+  }
+}

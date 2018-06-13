@@ -19,8 +19,8 @@ class Parser {
    * @param {string} input
    */
   constructor(input = '') {
-    this.letters = new Set(Parser.rangeChar());
-    this.digits = Parser.range();
+    this.letters = new Set(Parser.rangeChar('a', 'z').concat(Parser.rangeChar('A', 'Z')));
+    this.digits = new Set(Parser.range().map(d => d.toString()));
     this.input = input;
     this.globalPos = 0;
   }
@@ -32,7 +32,7 @@ class Parser {
    * @returns {boolean} *
    */
   isLetter(l) {
-    return this.letters.includes(l);
+    return this.letters.has(l);
   }
 
   /**
@@ -93,7 +93,7 @@ class Parser {
    * @returns {boolean}
    */
   isDigit(d) {
-    return this.digits.includes(d);
+    return this.digits.has(d);
   }
 
   /**
@@ -103,7 +103,7 @@ class Parser {
    * @returns {BaseSingular} *
    */
   parseGroup(pos) {
-    const g = new R.Group();
+    let g = new R.Group();
 
     let focus = this.input[pos];
 
@@ -112,7 +112,12 @@ class Parser {
         Parser.logErr(')', focus, 'unexpected end of input - unmatched "("');
         return undefined;
       } else {
-        g.addNext(this.parse(pos));
+        if (focus === '|') {
+          // and becomes or
+          let newOr = new R.Or();
+          newOr.addNext(g);
+          g = newOr;
+        } else g.addNext(this.parse(pos));
         pos = this.globalPos; // get end pos of the call
         focus = this.input[pos]; // advance to the next token
       }
@@ -120,10 +125,10 @@ class Parser {
 
     pos++; // skip over ')'
 
-    const tryQuant = this.parseQuant(g);
+    const tryQuant = this.parseQuant(pos, g);
 
     // globalPost set by parseCount();
-    if (tryQuant) return tryQuant;
+    if (tryQuant !== undefined) return tryQuant;
     else {
       this.globalPos = pos; // notify caller
       return g;
@@ -147,11 +152,11 @@ class Parser {
         return undefined;
       } else {
         const tryParseRange = this.parseSetRange(pos);
-        if (tryParseRange) {
+        if (tryParseRange !== undefined) {
           setNode.addNext(tryParseRange);
           pos = this.globalPos;
         } else {
-          setNode.addNext(new Text(focus));
+          setNode.addNext(new R.Text(focus));
           pos++;
         }
         focus = this.input[pos];
@@ -163,7 +168,7 @@ class Parser {
     const tryQuant = this.parseQuant(pos, setNode);
 
     // globalPost set by parseCount();
-    if (tryQuant) return tryQuant;
+    if (tryQuant !== undefined) return tryQuant;
     else {
       this.globalPos = pos; // notify caller
       return setNode;
@@ -234,7 +239,8 @@ class Parser {
   parseSetRangeChar(pos) {
     const node = new R.Or();
 
-    const from = this.input[pos];
+    let from = this.input[pos];
+    let focus = from;
 
     pos++; // skip over min to '-'
 
@@ -280,6 +286,14 @@ class Parser {
       min = Number.parseInt(focus, 10);
       pos++;
       focus = this.input[pos];
+
+      // match exactly min times
+      // e.g.: a{2}
+      if (focus === '}') {
+        pos++; // skip over '}'
+        this.globalPos = pos;
+        return new R.Quantified(node, min, min);
+      }
     }
 
     if (focus === ',') {
@@ -295,7 +309,6 @@ class Parser {
    * Called by parse(), parseSet() and parseGroup() and parse().
    *
    * It's called AFTER they parse a node OR when they end.
-   *
    * @param {number} pos
    * @param {BaseSingular} node
    * @returns {BaseSingular} *
@@ -351,13 +364,16 @@ class Parser {
         return this.parseSet(pos);
       }
       default: {
+
         const node = new R.Text(focus); // terminal
         pos++; // skip over it
+
         const tryQuant = this.parseQuant(pos, node);
-        if (tryQuant) return tryQuant;
+
         // globalPos set by tryQuant()
+        if (tryQuant !== undefined) return tryQuant;
         else {
-          this.globalPos = pos;
+          this.globalPos = pos; // notify caller
           return node;
         }
       }
@@ -392,14 +408,25 @@ class Parser {
   /**
    * Begin parsing.
    *
+   * Ends when all tokens in input have been processed.
+   *
    * @returns {BaseSingular} *
    */
   start() {
-    const g0 = new R.Group(); // 0th group
+    let g0 = new R.Group(); // 0th group
 
     while (this.globalPos < this.input.length) {
-      // globalPos is advanced by (recursive) parse() calls
-      g0.addNext(this.parse(this.globalPos));
+      let focus = this.input[this.globalPos];
+
+      if (focus === '|') {
+        let newOr = new R.Or();
+        newOr.addNext(g0);
+        g0 = newOr;
+        this.globalPos++; // skip over '|'
+      } else {
+        // globalPos is advanced by (recursive) parse() calls
+        g0.addNext(this.parse(this.globalPos));
+      }
     }
 
     return g0;
