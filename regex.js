@@ -117,6 +117,11 @@ class BaseSeq extends BaseSingular {
     this.nextNodes = [];
   }
 
+  /**
+   * Append a new node.
+   *
+   * @param {BaseSingular} another
+   */
   addNext(another) {
     this.nextNodes.push(another);
     return this;
@@ -170,27 +175,51 @@ class Or extends BaseSeq {
   }
 }
 
-// [abc]
-const set = xs =>
-  new Or(xs.map(x => (x.prototype.constructor.name === 'String' ? x : x.toString()))
-    .map(x => new Counting(x, 1, 1)));
+/**
+ * Parses [abc].
+ *
+ * @param {string} terms
+ * @returns {Or} *
+ */
+function set(terms) {
+  const _set = new Or();
+  for (let term of _set) {
+    _set.addNext(new Text(term));
+  }
+  return _set;
+}
 
 // [a-z] [0-9]
-const setRange = (i, j) => {
-  const stack = [];
+/**
+ * Parses [a-z], [0-9] and [A-Z].
+ *
+ * @param {string|number} i 
+ * @param {string|number} j
+ * @returns {Or} *
+ */
+function setRange(i, j) {
+  const node = new Or();
+
   if (i.prototype.constructor.name === 'Number') {
     while (i < j) {
-      stack.push(i.toString());
+      node.addNext(new Text(i.toString()));
       i++;
     }
   } else if (i.prototype.constructor.name === 'String') {
     i = i.charCodeAt(0);
     j = j.charCodeAt(0);
     while (i < j) {
-      stack.push(String.fromCharCode(i));
+      node.addNext(new Text(String.fromCharCode(i)));
       i++;
     }
+  } else {
+    console.error(`unexpected input
+expected string or number
+got ${i.toString()} and ${j.toString()}`);
+    return undefined;
   }
+
+  return node;
 };
 // a*
 const star = pat => new Counting(pat, 0, Number.POSITIVE_INFINITY);
@@ -199,38 +228,10 @@ const star = pat => new Counting(pat, 0, Number.POSITIVE_INFINITY);
 const plus = pat => new Counting(pat, 1, Number.POSITIVE_INFINITY);
 
 // a?
-const Opt = pat => new Counting(pat, 0, 1);
+const opt = pat => new Counting(pat, 0, 1);
 
 // a{,maxi}
 const max = (pat, maxi) => new Counting(pat, 0, maxi);
 
 // a{mini,}
 const min = (pat, mini) => new Counting(pat, mini, Number.POSITIVE_INFINITY);
-
-function main() {
-  const root = new Counting(
-    new Or(
-      new Text('bbb'),
-      new Text('aaa'),
-    ),
-    1,
-    3,
-  ).feed('aaaaaaaaa');
-
-  if (root.consume()) console.info('OK!');
-  else console.error('NOT OK!');
-}
-
-module.exports = {
-  Counting,
-  Group,
-  Or,
-  Text,     // the rest is derived from the above
-  max,      // a{,max}
-  min,      // a{min,}
-  opt,      // a? equiv to a{,1}
-  plus,     // a+ equiv to a{1,}
-  set,      // [abc] equiv to (a|b|c)
-  setRange, // [a-c] equiv to [abc] and (a|b|c)
-  star,     // a*
-};
