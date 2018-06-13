@@ -10,8 +10,14 @@
 
 const R = require('./regex.js');
 
+/**
+ * @param {number} min
+ * @param {number} max
+ * @param {number} step
+ * @returns {number[]} *
+ */
 function range(min = 0, max = 10, step = 1) {
-  let stack = [];
+  const stack = [];
   while (min < max) {
     stack.push(min);
     min += step;
@@ -19,8 +25,14 @@ function range(min = 0, max = 10, step = 1) {
   return stack;
 }
 
+/**
+ * @param {string} min
+ * @param {string} max
+ * @param {number} step
+ * @returns {string[]} *
+ */
 function rangeChar(min = 'a', max = 'z', step = 1) {
-  let stack = [];
+  const stack = [];
   let min = min.charCodeAt(0);
   let max = max.charCodeAt(0);
   while (min < max) {
@@ -31,14 +43,25 @@ function rangeChar(min = 'a', max = 'z', step = 1) {
 }
 
 const digits = range();
+
+/**
+ * @returns {boolean}
+ */
 const isDigit = d => digits.includes(d);
 
 const letters = new Set(rangeChar());
+
+/**
+ * @returns {boolean}
+ */
 const isLetter = l => letters.includes(l);
 
-const specials = ['.', '$', '^'] // TODO
+const specials = ['.', '$', '^']; // tODO
 
 class Parser {
+  /**
+   * @param {string} input
+   */
   constructor(input = '') {
     this.input = input;
     this.globalPos = 0;
@@ -46,6 +69,10 @@ class Parser {
 
   /**
    * Called on unexpected input. Only does informative logging.
+   *
+   * @param {string} expectedToken
+   * @param {string} unexpectedToken
+   * @param {string} extra
    */
   logErr(expectedToken, unexpectedToken, extra = '') {
     console.error(`expected ${expectedToken} but saw ${unexpectedToken}`);
@@ -54,6 +81,8 @@ class Parser {
 
   /**
    * Called by parse() AFTER it notices AND skips over '('.
+   *
+   * @param {number} pos
    */
   parseGroup(pos) {
     const g = new R.Group();
@@ -70,12 +99,21 @@ class Parser {
     }
 
     pos++; // skip over ')'
-    this.globalPos = pos; // notify caller
-    return g;
+
+    const tryQuant = parseQuant(g);
+
+    if (tryQuant) return tryQuant;
+    // globalPost set by parseCount();
+    else {
+      this.globalPos = pos; // notify caller
+      return g;
+    }
   }
 
   /**
    * Called by parse() and parseGroup() AFTER they notice AND skip over '['.
+   *
+   * @param {number} pos
    */
   parseSet(pos) {
     const set_ = new R.Or();
@@ -100,15 +138,23 @@ class Parser {
     }
 
     pos++; // skip over ']'
-    set_ = parseCount(pos, set_) || parsePlus(pos, set_) || parseOpt(pos, set_) || parseStar(pos, set_) || set_;
-    this.globalPos = pos; // notify caller
-    return set_;
+
+    const tryQuant = parseQuant(pos, set_);
+
+    if (tryQuant) return tryQuant;
+    // globalPost set by parseCount();
+    else {
+      this.globalPos = pos; // notify caller
+      return set_;
+    }
   }
 
   /**
-   * Called by parseSet(). Tries to match a-z. 
+   * Called by parseSet(). Tries to match a-z.
    *
    * In most cases this will fail and parseSet() will backtrack to a.
+   *
+   * @param {number} pos
    */
   parseSetRange(pos) {
     const node = new R.Or();
@@ -136,6 +182,8 @@ class Parser {
 
   /**
    * Called by parseSetRange() AFTER it determines that the first number (min) is a number.
+   *
+   * @param {number} pos
    */
   parseSetRangeNum(pos) {
     const node = new R.Or();
@@ -153,7 +201,7 @@ class Parser {
         const to = focus;
 
         while (from < to) {
-          node.addNext(new Text(from.toString()));
+          node.addNext(new R.Text(from.toString()));
           from++;
         }
 
@@ -169,6 +217,8 @@ class Parser {
 
   /**
    * Called by parseSetRange() AFTER it determines that the first character (min) is a letter.
+   *
+   * @param {number} pos
    */
   parseSetRangeChar(pos) {
     const node = new R.Or();
@@ -189,7 +239,7 @@ class Parser {
         j = to.charCodeAt(0);
 
         while (i < j) {
-          node.addNext(new Text(String.fromCharCode(i)));
+          node.addNext(new R.Text(String.fromCharCode(i)));
           i++;
         }
 
@@ -204,7 +254,10 @@ class Parser {
   }
 
   /**
-   * Called by parseSet() and parseGroup() and parse() AFTER it parses a node.
+   * Called by parseQuant() AFTER they
+   *
+   * @param {number} pos
+   * @param {BaseSingular} node
    */
   parseCount(pos, node) {
     let min = 0;
@@ -227,14 +280,78 @@ class Parser {
   }
 
   /**
-   * Called by start(). 
+   * Called by parse(), parseSet() and parseGroup() and parse() AFTER they parse a node OR when they end.
+   *
+   * @param {number} pos
+   * @param {BaseSingular} node
+   */
+  parseQuant(pos, node) {
+    const focus = this.input[pos];
+
+    switch (focus) {
+      case '+': {
+        pos++; // skip over '+'
+        this.globalPos = pos;
+        return new R.Quantified(node, 1, Number.POSITIVE_INFINITY);
+      }
+      case '*': {
+        pos++; // skip over '*'
+        this.globalPos = pos;
+        return new R.Quantified(node, 0, Number.POSITIVE_INFINITY);
+      }
+      case '?': {
+        pos++; // skip over '?'
+        this.globalPos = pos;
+        return new R.Quantified(node, 0, 1);
+      }
+      case '{': {
+        pos++; // skip over '{'
+        return parseCount(pos, node);
+      }
+      default: {
+        this.logErr('+ OR * OR ? OR {', focus);
+        return undefined;
+      }
+    }
+  }
+
+  /**
+   * Called by start().
    *
    * Whenever you are not in a capture group you are here.
+   *
+   * @param {number} pos
    */
-  parse(pos) {}
+  parse(pos) {
+    let focus = this.input[pos];
+
+    switch (focus) {
+      case '(': {
+        pos++; // skip over '('
+        return parseGroup(pos);
+      }
+      case '[': {
+        pos++; // skip over '['
+        return parseSet(pos);
+      }
+      default: {
+        let node = new R.Text(focus); // terminal
+        pos++; // skip over it
+        let tryQuant = parseQuant(pos, node);
+        if (tryQuant) return tryQuant; // globalPos set by tryQuant()
+        else {
+          this.globalPos = pos;
+          return node;
+        }
+      }
+    }
+  }
 
   /**
    * Called by parseCount() AFTER it notices AND skips over the comma.
+   *
+   * @param {number} pos
+   * @param {BaseSingular} node
    */
   parseCountAfterComma(pos, min, max, node) {
     let focus = this.input[pos];
@@ -247,7 +364,7 @@ class Parser {
     if (focus === '}') {
       pos++; // skip over '}'
       this.globalPos = pos;
-      return new R.Counting(node, min, max)
+      return new R.Quantified(node, min, max);
     } else {
       this.logErr('}', focus);
       return undefined;
@@ -258,17 +375,18 @@ class Parser {
    * Begin parsing.
    */
   start() {
-
     const g0 = new R.Group(); // 0th group
 
     let pos = this.globalPos;
 
-    while (pos < this.input.length) { 
+    while (pos < this.input.length) {
       g0.addNext(parse(pos));
 
-      // globalPos is set by the call if it succeeds in parsing
-      // it tells you where it finished parsing
-      pos = this.globalPos; 
+      /*
+       * globalPos is set by the call if it succeeds in parsing
+       * it tells you where it finished parsing
+       */
+      pos = this.globalPos;
     }
 
     return g0;

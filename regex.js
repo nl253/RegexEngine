@@ -38,7 +38,7 @@ class BaseSingular {
 }
 
 // a{min,max}
-class Counting extends BaseSingular {
+class Quantified extends BaseSingular {
   constructor(pat, min = 1, max = 1) {
     super();
     this.min = min;
@@ -174,64 +174,3 @@ class Or extends BaseSeq {
     return false;
   }
 }
-
-/**
- * Parses [abc].
- *
- * @param {string} terms
- * @returns {Or} *
- */
-function set(terms) {
-  const _set = new Or();
-  for (let term of _set) {
-    _set.addNext(new Text(term));
-  }
-  return _set;
-}
-
-// [a-z] [0-9]
-/**
- * Parses [a-z], [0-9] and [A-Z].
- *
- * @param {string|number} i 
- * @param {string|number} j
- * @returns {Or} *
- */
-function setRange(i, j) {
-  const node = new Or();
-
-  if (i.prototype.constructor.name === 'Number') {
-    while (i < j) {
-      node.addNext(new Text(i.toString()));
-      i++;
-    }
-  } else if (i.prototype.constructor.name === 'String') {
-    i = i.charCodeAt(0);
-    j = j.charCodeAt(0);
-    while (i < j) {
-      node.addNext(new Text(String.fromCharCode(i)));
-      i++;
-    }
-  } else {
-    console.error(`unexpected input
-expected string or number
-got ${i.toString()} and ${j.toString()}`);
-    return undefined;
-  }
-
-  return node;
-};
-// a*
-const star = pat => new Counting(pat, 0, Number.POSITIVE_INFINITY);
-
-// a+
-const plus = pat => new Counting(pat, 1, Number.POSITIVE_INFINITY);
-
-// a?
-const opt = pat => new Counting(pat, 0, 1);
-
-// a{,maxi}
-const max = (pat, maxi) => new Counting(pat, 0, maxi);
-
-// a{mini,}
-const min = (pat, mini) => new Counting(pat, mini, Number.POSITIVE_INFINITY);
