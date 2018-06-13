@@ -1,4 +1,12 @@
-#!/usr/bin/env node
+/**
+ * File description.
+ *
+ * @format
+ * @copyright 2018
+ * @author nl253
+ * @see {@link  details and explanation}
+ * @requires
+ */
 
 class BaseSingular {
   constructor() {

@@ -11,6 +11,8 @@
 const R = require('./regex.js');
 
 /**
+ * Produce a list with numbers in range.
+ *
  * @param {number} min
  * @param {number} max
  * @param {number} step
@@ -26,6 +28,8 @@ function range(min = 0, max = 10, step = 1) {
 }
 
 /**
+ * Produce a list with letters in range.
+ *
  * @param {string} min
  * @param {string} max
  * @param {number} step
@@ -45,6 +49,9 @@ function rangeChar(min = 'a', max = 'z', step = 1) {
 const digits = range();
 
 /**
+ * Check if string d is a digit.
+ *
+ * @param {string} d
  * @returns {boolean}
  */
 const isDigit = d => digits.includes(d);
@@ -52,14 +59,32 @@ const isDigit = d => digits.includes(d);
 const letters = new Set(rangeChar());
 
 /**
+ * Check if string l is a letter.
+ *
+ * @param {string} l
  * @returns {boolean}
  */
 const isLetter = l => letters.includes(l);
 
-const specials = ['.', '$', '^']; // tODO
+const specials = ['.', '$', '^']; // TODO
+
+/**
+ * Called on unexpected input. Only does informative logging.
+ *
+ * @format
+ * @param {string} expectedToken
+ * @param {string} unexpectedToken
+ * @param {string} extra
+ */
+function logErr(expectedToken, unexpectedToken, extra = '') {
+  console.error(`expected ${expectedToken} but saw ${unexpectedToken}`);
+  if (extra.length > 0) console.error(extra);
+}
 
 class Parser {
   /**
+   * Make a new Parser.
+   *
    * @param {string} input
    */
   constructor(input = '') {
@@ -68,31 +93,22 @@ class Parser {
   }
 
   /**
-   * Called on unexpected input. Only does informative logging.
-   *
-   * @param {string} expectedToken
-   * @param {string} unexpectedToken
-   * @param {string} extra
-   */
-  logErr(expectedToken, unexpectedToken, extra = '') {
-    console.error(`expected ${expectedToken} but saw ${unexpectedToken}`);
-    if (extra.length > 0) console.error(extra);
-  }
-
-  /**
    * Called by parse() AFTER it notices AND skips over '('.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parseGroup(pos) {
     const g = new R.Group();
 
+    let focus = this.input[pos];
+
     while (focus !== ')') {
       if (pos >= this.input.length) {
-        this.logErr(')', focus, 'unexpected end of input - unmatched "("');
+        logErr(')', focus, 'unexpected end of input - unmatched "("');
         return undefined;
       } else {
-        g.addNext(parse(pos));
+        g.addNext(this.parse(pos));
         pos = this.globalPos; // get end pos of the call
         focus = this.input[pos]; // advance to the next token
       }
@@ -100,7 +116,7 @@ class Parser {
 
     pos++; // skip over ')'
 
-    const tryQuant = parseQuant(g);
+    const tryQuant = this.parseQuant(g);
 
     if (tryQuant) return tryQuant;
     // globalPost set by parseCount();
@@ -114,6 +130,7 @@ class Parser {
    * Called by parse() and parseGroup() AFTER they notice AND skip over '['.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parseSet(pos) {
     const set_ = new R.Or();
@@ -122,10 +139,10 @@ class Parser {
 
     while (focus !== ']') {
       if (pos >= this.input.length) {
-        this.logErr(']', focus, 'unexpected end of input - unmatched "["');
+        logErr(']', focus, 'unexpected end of input - unmatched "["');
         return undefined;
       } else {
-        const tryParseRange = parseSetRange(pos);
+        const tryParseRange = this.parseSetRange(pos);
         if (tryParseRange) {
           set_.addNext(tryParseRange);
           pos = this.globalPos;
@@ -139,7 +156,7 @@ class Parser {
 
     pos++; // skip over ']'
 
-    const tryQuant = parseQuant(pos, set_);
+    const tryQuant = this.parseQuant(pos, set_);
 
     if (tryQuant) return tryQuant;
     // globalPost set by parseCount();
@@ -155,6 +172,7 @@ class Parser {
    * In most cases this will fail and parseSet() will backtrack to a.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parseSetRange(pos) {
     const node = new R.Or();
@@ -173,9 +191,9 @@ class Parser {
         if (isLetter(focus) || isDigit(focus)) {
           this.globalPos = pos; // notify caller of successful progress
           return { to: focus, from };
-        } else this.logErr('/[a-zA-Z0-9]/', focus, 'invalid min range symbol');
-      } else this.logErr('-', focus);
-    } else this.logErr('/[a-zA-Z0-9]/', from, 'invalid max range symbol');
+        } else logErr('/[a-zA-Z0-9]/', focus, 'invalid min range symbol');
+      } else logErr('-', focus);
+    } else logErr('/[a-zA-Z0-9]/', from, 'invalid max range symbol');
 
     return undefined;
   }
@@ -184,6 +202,7 @@ class Parser {
    * Called by parseSetRange() AFTER it determines that the first number (min) is a number.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parseSetRangeNum(pos) {
     const node = new R.Or();
@@ -209,8 +228,8 @@ class Parser {
         this.globalPos = pos;
 
         return node;
-      } else this.logErr('/[a-zA-Z0-9]/', focus, 'invalid min range number');
-    } else this.logErr('-', focus);
+      } else logErr('/[a-zA-Z0-9]/', focus, 'invalid min range number');
+    } else logErr('-', focus);
 
     return undefined;
   }
@@ -219,6 +238,7 @@ class Parser {
    * Called by parseSetRange() AFTER it determines that the first character (min) is a letter.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parseSetRangeChar(pos) {
     const node = new R.Or();
@@ -235,8 +255,8 @@ class Parser {
       if (isLetter(focus)) {
         const to = focus;
 
-        i = from.charCodeAt(0);
-        j = to.charCodeAt(0);
+        let i = from.charCodeAt(0);
+        let j = to.charCodeAt(0);
 
         while (i < j) {
           node.addNext(new R.Text(String.fromCharCode(i)));
@@ -247,8 +267,8 @@ class Parser {
         this.globalPos = pos;
 
         return node;
-      } else this.logErr('/[a-zA-Z]/', focus, 'invalid min range character');
-    } else this.logErr('-', focus);
+      } else logErr('/[a-zA-Z]/', focus, 'invalid min range character');
+    } else logErr('-', focus);
 
     return undefined;
   }
@@ -258,6 +278,7 @@ class Parser {
    *
    * @param {number} pos
    * @param {BaseSingular} node
+   * @returns {BaseSingular} *
    */
   parseCount(pos, node) {
     let min = 0;
@@ -274,16 +295,19 @@ class Parser {
       pos++;
       return this.parseCountAfterComma(pos, min, max, node);
     } else {
-      this.logErr(',', focus);
+      logErr(',', focus);
       return undefined;
     }
   }
 
   /**
-   * Called by parse(), parseSet() and parseGroup() and parse() AFTER they parse a node OR when they end.
+   * Called by parse(), parseSet() and parseGroup() and parse().
+   *
+   * It's called AFTER they parse a node OR when they end.
    *
    * @param {number} pos
    * @param {BaseSingular} node
+   * @returns {BaseSingular} *
    */
   parseQuant(pos, node) {
     const focus = this.input[pos];
@@ -306,10 +330,10 @@ class Parser {
       }
       case '{': {
         pos++; // skip over '{'
-        return parseCount(pos, node);
+        return this.parseCount(pos, node);
       }
       default: {
-        this.logErr('+ OR * OR ? OR {', focus);
+        logErr('+ OR * OR ? OR {', focus);
         return undefined;
       }
     }
@@ -321,6 +345,7 @@ class Parser {
    * Whenever you are not in a capture group you are here.
    *
    * @param {number} pos
+   * @returns {BaseSingular} *
    */
   parse(pos) {
     let focus = this.input[pos];
@@ -328,17 +353,18 @@ class Parser {
     switch (focus) {
       case '(': {
         pos++; // skip over '('
-        return parseGroup(pos);
+        return this.parseGroup(pos);
       }
       case '[': {
         pos++; // skip over '['
-        return parseSet(pos);
+        return this.parseSet(pos);
       }
       default: {
         let node = new R.Text(focus); // terminal
         pos++; // skip over it
-        let tryQuant = parseQuant(pos, node);
-        if (tryQuant) return tryQuant; // globalPos set by tryQuant()
+        let tryQuant = this.parseQuant(pos, node);
+        if (tryQuant) return tryQuant;
+        // globalPos set by tryQuant()
         else {
           this.globalPos = pos;
           return node;
@@ -352,6 +378,7 @@ class Parser {
    *
    * @param {number} pos
    * @param {BaseSingular} node
+   * @returns {BaseSingular} *
    */
   parseCountAfterComma(pos, min, max, node) {
     let focus = this.input[pos];
@@ -366,31 +393,32 @@ class Parser {
       this.globalPos = pos;
       return new R.Quantified(node, min, max);
     } else {
-      this.logErr('}', focus);
+      logErr('}', focus);
       return undefined;
     }
   }
 
   /**
    * Begin parsing.
+   *
+   * @returns {BaseSingular} *
    */
   start() {
     const g0 = new R.Group(); // 0th group
 
-    let pos = this.globalPos;
-
-    while (pos < this.input.length) {
-      g0.addNext(parse(pos));
-
-      /*
-       * globalPos is set by the call if it succeeds in parsing
-       * it tells you where it finished parsing
-       */
-      pos = this.globalPos;
+    while (this.globalPos < this.input.length) {
+      // globalPos is advanced by (recursive) parse() calls
+      g0.addNext(this.parse(this.globalPos));
     }
 
     return g0;
   }
+}
+
+function main() {
+  const parser = new Parser('abc');
+  console.info(parser);
+  console.info(parser.start());
 }
 
 // vim:foldmethod=marker:foldmarker={,}:
