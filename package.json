@@ -2,7 +2,7 @@
   "name": "regex-engine",
   "version": "1.0.0",
   "main": "main.js",
-  "author": "nl253 <nl253@kent.ac.uk>",
+  "author": "MX <github.qxlbr@dralias.com>",
   "license": "MIT",
   "private": false,
   "scripts": {
